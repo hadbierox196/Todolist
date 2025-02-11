@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -336,6 +337,8 @@
         const joystickThumb = document.getElementById('joystickThumb');
         const selectionLine = document.getElementById('selectionLine');
         const categoriesContainer = document.getElementById('categoriesContainer');
+        const addCategoryBtn = document.getElementById('addCategoryBtn');
+        const addTodoBtn = document.getElementById('addTodoBtn');
 
         // Joystick variables
         const maxRadius = 100;
@@ -360,6 +363,7 @@
         }
 
         function startDrag(e) {
+            e.preventDefault();
             isDragging = true;
             joystickThumb.classList.add('active');
             categoriesContainer.querySelectorAll('.category-item').forEach(item => {
@@ -369,6 +373,7 @@
 
         function drag(e) {
             if (!isDragging) return;
+            e.preventDefault();
             
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -478,8 +483,36 @@
             });
         }
 
-        // Rest of the code remains similar to previous version with delete functionality and todos management
-        // ... (Include all the remaining functions from previous answer here)
+        function addCategory() {
+            const input = document.getElementById('categoryInput');
+            const name = input.value.trim();
+            
+            if (name) {
+                categories.push(name);
+                storage.setItem('categories', JSON.stringify(categories));
+                renderCategories();
+                closeModal('categoryModal');
+                input.value = '';
+            }
+        }
+
+        function showTodosPage(category) {
+            currentCategory = category;
+            document.getElementById('categoriesPage').style.display = 'none';
+            document.getElementById('todosPage').style.display = 'block';
+            document.getElementById('categoryTitle').textContent = category;
+            renderTodos();
+        }
+
+        function showCategoriesPage() {
+            document.getElementById('categoriesPage').style.display = 'flex';
+            document.getElementById('todosPage').style.display = 'none';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
         function addTodo() {
             const title = document.getElementById('todoTitle').value.trim();
             const desc = document.getElementById('todoDesc').value.trim();
@@ -494,7 +527,6 @@
                 renderTodos();
                 closeModal('todoModal');
                 
-                // Clear inputs
                 document.getElementById('todoTitle').value = '';
                 document.getElementById('todoDesc').value = '';
                 document.getElementById('todoLink').value = '';
@@ -521,43 +553,47 @@
                         card.addEventListener('click', () => window.open(todo.link, '_blank'));
                     }
 
-                    // Add touch events
-                    card.addEventListener('touchstart', handleTodoTouchStart);
-                    card.addEventListener('touchmove', (e) => handleTodoTouchMove(e, todo));
-                    card.addEventListener('touchend', (e) => handleTodoTouchEnd(e, todo));
+                    // Swipe to delete
+                    let touchStartX = 0;
+                    card.addEventListener('touchstart', (e) => {
+                        touchStartX = e.touches[0].clientX;
+                    });
+                    
+                    card.addEventListener('touchmove', (e) => {
+                        const touch = e.touches[0];
+                        const deltaX = touch.clientX - touchStartX;
+                        if (deltaX > 50) {
+                            card.querySelector('.delete-overlay').style.right = '0';
+                        }
+                    });
 
-                    // Add mouse events
-                    card.addEventListener('mousedown', () => startTodoLongPress(todo));
-                    card.addEventListener('mouseup', cancelTodoLongPress);
-                    card.addEventListener('mouseleave', cancelTodoLongPress);
+                    card.addEventListener('touchend', (e) => {
+                        const touch = e.changedTouches[0];
+                        const deltaX = touch.clientX - touchStartX;
+                        if (deltaX > 100) {
+                            deleteTodo(index);
+                        } else {
+                            card.querySelector('.delete-overlay').style.right = '-100%';
+                        }
+                    });
+
+                    // Right-click delete
+                    card.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        deleteTodo(index);
+                    });
 
                     grid.appendChild(card);
                 });
             }
         }
 
-        // Delete functionality
-        function handleTouchStart(e, category) {
-            touchStartX = e.touches[0].clientX;
-            longPressTimer = setTimeout(() => confirmDeleteCategory(category), 1000);
-        }
-
-        function handleTouchMove(e) {
-            if (Math.abs(e.touches[0].clientX - touchStartX) > 10) {
-                cancelLongPress();
+        function deleteTodo(index) {
+            if (confirm('Delete this todo?')) {
+                todos[currentCategory].splice(index, 1);
+                storage.setItem('todos', JSON.stringify(todos));
+                renderTodos();
             }
-        }
-
-        function handleTouchEnd() {
-            cancelLongPress();
-        }
-
-        function startLongPress(category) {
-            longPressTimer = setTimeout(() => confirmDeleteCategory(category), 1000);
-        }
-
-        function cancelLongPress() {
-            clearTimeout(longPressTimer);
         }
 
         function confirmDeleteCategory(category) {
@@ -571,58 +607,18 @@
             }
         }
 
-        // Todo deletion
-        let todoLongPressTimer;
-        let todoTouchStartX = 0;
-
-        function handleTodoTouchStart(e) {
-            todoTouchStartX = e.touches[0].clientX;
-            const card = e.currentTarget;
-            card.classList.add('swiping');
-            todoLongPressTimer = setTimeout(() => confirmDeleteTodo(card), 1000);
-        }
-
-        function handleTodoTouchMove(e, todo) {
-            const touch = e.touches[0];
-            const deltaX = touch.clientX - todoTouchStartX;
-            const overlay = e.currentTarget.querySelector('.delete-overlay');
-            
-            if (deltaX > 0) {
-                overlay.style.right = `${-deltaX}px`;
-            }
-            
-            if (deltaX > 100) {
-                confirmDeleteTodo(e.currentTarget, todo);
-            }
-        }
-
-        function handleTodoTouchEnd(e, todo) {
-            const card = e.currentTarget;
-            card.classList.remove('swiping');
-            card.querySelector('.delete-overlay').style.right = '-100%';
-            clearTimeout(todoLongPressTimer);
-        }
-
-        function startTodoLongPress(todo) {
-            todoLongPressTimer = setTimeout(() => confirmDeleteTodo(todo), 1000);
-        }
-
-        function cancelTodoLongPress() {
-            clearTimeout(todoLongPressTimer);
-        }
-
-        function confirmDeleteTodo(card, todo) {
-            if (confirm('Delete this todo?')) {
-                const index = Array.from(card.parentNode.children).indexOf(card);
-                todos[currentCategory].splice(index, 1);
-                storage.setItem('todos', JSON.stringify(todos));
-                renderTodos();
-            }
-        }
-        
         // Initialize
         initJoystick();
         renderCategories();
+
+        // Event listeners
+        addCategoryBtn.addEventListener('click', () => {
+            document.getElementById('categoryModal').style.display = 'flex';
+        });
+
+        addTodoBtn.addEventListener('click', () => {
+            document.getElementById('todoModal').style.display = 'flex';
+        });
 
         // Close modals when clicking outside
         window.onclick = function(event) {
@@ -632,4 +628,6 @@
         };
     </script>
 </body>
-    </html>
+</html>
+
+
